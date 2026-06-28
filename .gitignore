@@ -1,0 +1,13 @@
+# .gitignore for Invoice Tool
+__pycache__/
+*.py[cod]
+*.pyo
+env/
+venv/
+.env
+*.db
+*.sqlite
+invoices_export.xlsx
+node_modules/
+build/
+.DS_Store

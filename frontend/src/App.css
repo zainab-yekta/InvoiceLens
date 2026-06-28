@@ -1,0 +1,182 @@
+/* Layout */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f7f9;
+}
+
+.page-wrapper {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: #023047;
+  color: #fff;
+  font-size: 1.5rem;
+  padding: 20px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-content {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+}
+
+/* Components */
+.card {
+  background-color: #fff;
+  padding: 20px;
+  margin-bottom: 30px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.upload-card input {
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 8px 16px;
+  background-color: #219ebc;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin: 8px 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+button:hover {
+  background-color: #126782;
+}
+
+/* PDF Preview */
+.pdf-preview {
+  margin-top: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Fields section */
+.fields-section {
+  background-color: #f9fafa;
+}
+
+.field-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.field-list li {
+  padding: 5px 0;
+}
+
+.form-row {
+  margin-bottom: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-row label {
+  width: 150px;
+  font-weight: bold;
+}
+
+.form-row input {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.scrollable-table {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+}
+
+th {
+  background-color: #e0f2f1;
+  text-align: left;
+  position: sticky;
+  top: 0;
+}
+
+.export-section {
+  margin-top: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+input[type=\"date\"], select {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* Alerts and Tags */
+.alert-box {
+  background-color: #ffe5e5;
+  color: #a00000;
+  border: 1px solid #ffcccc;
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 6px;
+}
+
+.error {
+  color: red;
+  font-weight: bold;
+}
+
+.warning {
+  color: #c87e00;
+  font-weight: bold;
+}
+
+.ocr-badge {
+  background-color: #f7df1e;
+  color: #111;
+  font-weight: 600;
+  padding: 3px 8px;
+  margin-left: 12px;
+  font-size: 0.75rem;
+  border-radius: 4px;
+}
+
+.lang-badge {
+  margin-left: 10px;
+  background-color: #d1d1d1;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+}
+
+.tags-line {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #e9f5ff;
+  border-left: 4px solid #2196f3;
+  font-size: 0.95rem;
+}
