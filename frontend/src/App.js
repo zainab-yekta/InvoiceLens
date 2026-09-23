@@ -1,130 +1,149 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { ToastContainer, toast } from 'react-toastify';
+import UploadCard from './components/UploadCard';
+import ExtractedFields from './components/ExtractedFields';
+import InvoiceTable from './components/InvoiceTable';
+import { FIELD_LABELS, formatAmount, formatDate, missingFields, errorText } from './format';
 import './App.css';
 
-axios.defaults.baseURL = 'http://127.0.0.1:8000';
+axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+
+const SAVED_COLUMNS = [
+  { label: '#', render: (_, idx) => idx + 1 },
+  { label: 'Processing Date', render: (inv) => formatDate(inv.processing_date) },
+  { label: 'Invoice No', render: (inv) => inv.invoice_number },
+  { label: 'Issue Date', render: (inv) => formatDate(inv.issue_date) },
+  { label: 'Tax No', render: (inv) => inv.tax_number || '–' },
+  { label: 'VAT %', render: (inv) => (inv.vat_percent ? `${inv.vat_percent} %` : '–') },
+  { label: 'VAT Amount', render: (inv) => formatAmount(inv.vat_amount, inv.language) },
+  { label: 'Total', render: (inv) => <b>{formatAmount(inv.total_amount, inv.language)}</b> },
+  { label: 'Exemption Reason', render: (inv) => inv.exemption_reason || '–' },
+];
+
+const REJECTED_COLUMNS = [
+  { label: '#', render: (_, idx) => idx + 1 },
+  { label: 'Rejection Date', render: (inv) => formatDate(inv.rejection_date) },
+  { label: 'Invoice No', render: (inv) => inv.invoice_number || '–' },
+  { label: 'Issue Date', render: (inv) => formatDate(inv.issue_date) },
+  { label: 'Reason', render: (inv) => inv.reason || '–' },
+];
 
 function App() {
   const [file, setFile] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [pdfVisible, setPdfVisible] = useState(true);
   const [extracted, setExtracted] = useState(null);
+  const [editedFields, setEditedFields] = useState({});
+  const [fieldsBeforeEdit, setFieldsBeforeEdit] = useState({});
+  const [editMode, setEditMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [rejected, setRejected] = useState([]);
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [dateType, setDateType] = useState('processing_date');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [editMode, setEditMode] = useState(false);
-  const [editedFields, setEditedFields] = useState({});
 
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
+  const mandatory = extracted?.mandatory_fields || [];
+  const missing = extracted ? missingFields(editedFields, mandatory) : [];
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     try {
       const res = await axios.get('/get_invoices');
       setInvoices(res.data.accepted || []);
       setRejected(res.data.rejected || []);
     } catch (err) {
-      setErrorMessage("Failed to load invoices");
+      toast.error('Could not load invoices. Is the backend running on port 8000?');
     }
-  };
+  }, []);
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files[0];
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const handleFileSelect = (selected) => {
     setFile(selected);
-    setPdfUrl(URL.createObjectURL(selected));
     setExtracted(null);
-    setErrorMessage('');
+    setEditMode(false);
   };
 
   const handleProceed = async () => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
 
+    setLoading(true);
     try {
       const res = await axios.post('/extract_fields', formData);
-      console.log("Extracted response:", res.data);
       setExtracted(res.data);
       setEditedFields(res.data.fields || {});
-      if (res.data.status === 'rejected') {
-        setErrorMessage('⚠️ Mandatory fields missing. Please reject or fix.');
-      } else {
-        setErrorMessage('');
-      }
-    } catch {
-      setErrorMessage('An error occurred during extraction.');
+      setEditMode(false);
+    } catch (err) {
+      toast.error(errorText(err, 'Something went wrong while reading the invoice.'));
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleUpload = async () => {
-    if (!extracted || extracted.status !== 'accepted') return;
-
-    const mandatoryFields = ['invoice_number', 'date', 'total_amount'];
-    const missing = mandatoryFields.filter(field => !editedFields[field]);
-
-    if (missing.length > 0) {
-      setErrorMessage(`Missing fields: ${missing.join(', ')}`);
-      return;
-    }
-
+    if (!extracted || missing.length > 0) return;
+    setBusy(true);
     try {
       await axios.post('/save_invoice', {
         fields: editedFields,
-        accepted: true,
         used_ocr: extracted.used_ocr || false,
+        language: extracted.language,
       });
+      toast.success(`Invoice ${editedFields.invoice_number} saved`);
       fetchInvoices();
       resetView();
     } catch (err) {
-      if (err.response?.status === 409) {
-        setErrorMessage("❗ Invoice already exists.");
-      } else {
-        setErrorMessage("❌ Failed to save invoice: " + err.response?.data?.detail || 'Server error');
-      }
+      toast.error(errorText(err, 'Could not save the invoice.'));
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleReject = async () => {
-    const mandatoryFields = ['invoice_number', 'issue_date', 'tax_number', 'vat_percent', 'vat_amount', 'vat_id', 'total_amount'];
-    const missingFields = mandatoryFields.filter(field => !editedFields[field]);
-    const reasonText = missingFields.length > 0
-      ? `Missing fields: ${missingFields.join(', ')}`
-      : 'Missing mandatory fields';
+    const reason = missing.length > 0
+      ? `Missing fields: ${missing.map((key) => FIELD_LABELS[key]).join(', ')}`
+      : 'Rejected by reviewer';
 
+    setBusy(true);
     try {
       await axios.post('/reject_invoice', {
-        invoice_number: editedFields.invoice_number || "UNKNOWN",
-        issue_date: editedFields.date || "",
-        reason: reasonText,
+        invoice_number: editedFields.invoice_number || '',
+        issue_date: editedFields.date || '',
+        reason,
       });
+      toast.info('Invoice moved to rejected invoices');
       fetchInvoices();
       resetView();
     } catch (err) {
-      if (err.response?.status === 409) {
-        setErrorMessage("❗ Invoice already exists.");
-      } else {
-        setErrorMessage("❌ Failed to reject invoice: " + err.response?.data?.detail || 'Server error');
-      }
+      toast.error(errorText(err, 'Could not reject the invoice.'));
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const startEdit = () => {
+    setFieldsBeforeEdit(editedFields);
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setEditedFields(fieldsBeforeEdit);
+    setEditMode(false);
   };
 
   const resetView = () => {
     setExtracted(null);
     setFile(null);
-    setPdfUrl(null);
-    setPdfVisible(false);
-    setErrorMessage('');
     setEditMode(false);
     setEditedFields({});
   };
 
   const downloadExcel = async (type) => {
     if (!dateRange.from || !dateRange.to) {
-      setErrorMessage("❗ Please select both From and To dates.");
+      toast.warn('Please choose both a From and a To date first.');
       return;
     }
 
@@ -135,189 +154,102 @@ function App() {
       formData.append('from_date', dateRange.from);
       formData.append('to_date', dateRange.to);
 
-      const res = await axios.post('/export_excel', formData, {
-        responseType: 'blob',
-      });
-
-      const blob = new Blob([res.data], {
+      const res = await axios.post('/export_excel', formData, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-
+      }));
       const link = document.createElement('a');
-      link.href = window.URL.createObjectURL(blob);
-      link.download = `${type}_invoices.xlsx`;
+      link.href = url;
+      link.download = `${type}_invoices_${dateRange.from}_${dateRange.to}.xlsx`;
       link.click();
-      setErrorMessage('');
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("❌ Failed to download Excel:", err);
-      setErrorMessage("Export failed. Please try again or check the server.");
+      toast.error('Export failed. Please try again or check the server.');
     }
   };
 
   return (
-    <div className="page-wrapper">
-      <div className="sidebar">Invoice Tool</div>
-      <div className="main-content">
-        {errorMessage && <div className="alert-box">{errorMessage}</div>}
+    <div className="app-shell">
+      <header className="app-header">
+        <h1>Invoice Tool</h1>
+        <p>Extract, review and export German and English invoices</p>
+      </header>
 
-        {/* Upload Section */}
-        <div className="card upload-card">
-          <h2>Upload & Extract Invoice</h2>
-          <input type="file" onChange={handleFileChange} />
-          {pdfUrl && (
-            <>
-              <button onClick={() => setPdfVisible(!pdfVisible)}>
-                {pdfVisible ? "Minimize PDF" : "Maximize PDF"}
-              </button>
-              {pdfVisible && (
-                <div className="pdf-preview">
-                  <embed src={pdfUrl} width="100%" height="400px" />
-                  <button onClick={handleProceed}>Proceed</button>
-                </div>
-              )}
-            </>
-          )}
+      <main className="app-main">
+        <div className="grid-top">
+          <UploadCard
+            file={file}
+            onFileSelect={handleFileSelect}
+            onProceed={handleProceed}
+            loading={loading}
+          />
+          <ExtractedFields
+            extracted={extracted}
+            fields={editedFields}
+            missing={missing}
+            editMode={editMode}
+            busy={busy}
+            onChange={(key, value) => setEditedFields((prev) => ({ ...prev, [key]: value }))}
+            onEdit={startEdit}
+            onDone={() => setEditMode(false)}
+            onCancel={cancelEdit}
+            onUpload={handleUpload}
+            onReject={handleReject}
+          />
         </div>
 
-        {/* Extracted Fields Section */}
-        {extracted && (
-          <div className="card fields-section">
-            <h3>
-              Extracted Fields:
-              {extracted.used_ocr && <span className="ocr-badge">OCR Used</span>}
-              {extracted.language && (
-                <span className="lang-badge">Language: {extracted.language.toUpperCase()}</span>
-              )}
-            </h3>
+        <section className="card export-bar">
+          <span className="export-bar-title">Export date range</span>
+          <label>
+            Filter by
+            <select value={dateType} onChange={(e) => setDateType(e.target.value)}>
+              <option value="processing_date">Processing Date</option>
+              <option value="issue_date">Issue Date</option>
+            </select>
+          </label>
+          <label>
+            From
+            <input
+              type="date"
+              value={dateRange.from}
+              onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="date"
+              value={dateRange.to}
+              onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
+            />
+          </label>
+        </section>
 
-            <div className="tags-line">
-              {extracted.tags?.length > 0 && (
-                <p><b>Tags:</b> {extracted.tags.join(', ')}</p>
-              )}
-            </div>
-
-            {editMode ? (
-              <div>
-                {Object.entries(editedFields).map(([key, val]) => (
-                  <div className="form-row" key={key}>
-                    <label>{key}:</label>
-                    <input
-                      type="text"
-                      value={val || ''}
-                      onChange={(e) =>
-                        setEditedFields(prev => ({ ...prev, [key]: e.target.value }))
-                      }
-                    />
-                  </div>
-                ))}
-                <button onClick={() => {
-                  setEditMode(false);
-                }}>Save Changes</button>
-                <button onClick={() => setEditMode(false)}>Cancel</button>
-              </div>
-            ) : (
-              <ul className="field-list">
-                {Object.entries(editedFields).map(([key, val]) => (
-                  <li key={key}><b>{key}:</b> {val || '—'}</li>
-                ))}
-              </ul>
-            )}
-
-            <p>Status: <strong>{extracted.status}</strong></p>
-            {extracted.language_warning && <p className="warning">{extracted.language_warning}</p>}
-            {extracted.status === 'rejected' && extracted.reason && (
-              <p className="error">Reason: {extracted.reason}</p>
-            )}
-
-            {!editMode && (
-              <button onClick={() => setEditMode(true)}>Fix / Edit</button>
-            )}
-            <button onClick={handleUpload} disabled={extracted.status !== 'accepted'}>
-              Upload
-            </button>
-            <button onClick={handleReject}>Reject</button>
-          </div>
-        )}
-
-        {/* Date Filter Shared Section */}
-        <div className="card export-section">
-          <label><b>Filter by Date Type:</b></label>
-          <select value={dateType} onChange={e => setDateType(e.target.value)}>
-            <option value="processing_date">Processing Date</option>
-            <option value="issue_date">Issue Date</option>
-          </select>
-          <input type="date" value={dateRange.from} onChange={e => setDateRange(prev => ({ ...prev, from: e.target.value }))} />
-          <input type="date" value={dateRange.to} onChange={e => setDateRange(prev => ({ ...prev, to: e.target.value }))} />
+        <div className="grid-bottom">
+          <InvoiceTable
+            title="Saved Invoices"
+            count={invoices.length}
+            columns={SAVED_COLUMNS}
+            rows={invoices}
+            emptyText="No saved invoices yet."
+            exportLabel="Export Accepted"
+            exportStyle="btn-primary"
+            onExport={() => downloadExcel('accepted')}
+          />
+          <InvoiceTable
+            title="Rejected Invoices"
+            count={rejected.length}
+            columns={REJECTED_COLUMNS}
+            rows={rejected}
+            emptyText="No rejected invoices."
+            exportLabel="Export Rejected"
+            exportStyle="btn-outline"
+            onExport={() => downloadExcel('rejected')}
+          />
         </div>
+      </main>
 
-        {/* Saved Invoices Table */}
-        <div className="card">
-          <h3>Saved Invoices</h3>
-          <div className="scrollable-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Processing Date</th>
-                  <th>Invoice No</th>
-                  <th>Issue Date</th>
-                  <th>Tax No</th>
-                  <th>VAT %</th>
-                  <th>VAT Amount</th>
-                  <th>Total</th>
-                  <th>Exemption Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv, idx) => (
-                  <tr key={idx}>
-                    <td>{idx + 1}</td>
-                    <td>{inv.processing_date || '-'}</td>
-                    <td>{inv.invoice_number}</td>
-                    <td>{inv.issue_date}</td>
-                    <td>{inv.tax_number}</td>
-                    <td>{inv.vat_percent}</td>
-                    <td>{inv.vat_amount}</td>
-                    <td>{inv.total_amount}</td>
-                    <td>{inv.exemption_reason || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button onClick={() => downloadExcel('accepted')}>Export Accepted</button>
-        </div>
-
-        {/* Rejected Invoices Table */}
-        <div className="card">
-          <h3>Rejected Invoices</h3>
-          <div className="scrollable-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Rejection Date</th>
-                  <th>Invoice No</th>
-                  <th>Issue Date</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rejected.map((inv, idx) => (
-                  <tr key={idx}>
-                    <td>{idx + 1}</td>
-                    <td>{inv.rejection_date || 'N/A'}</td>
-                    <td>{inv.invoice_number || 'N/A'}</td>
-                    <td>{inv.issue_date || 'N/A'}</td>
-                    <td>{inv.reason || 'Invalid Fields'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button onClick={() => downloadExcel('rejected')}>Export Rejected</button>
-        </div>
-      </div>
+      <ToastContainer position="bottom-right" autoClose={4000} newestOnTop />
     </div>
   );
 }
