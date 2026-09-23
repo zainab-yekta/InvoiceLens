@@ -7,10 +7,14 @@ Upload a German or English invoice (PDF or scanned image), check the fields the 
 - Reads the text layer of digital PDFs with pdfplumber. If there isn't one (a scanned PDF or a photo), it runs Tesseract OCR instead.
 - Extracts invoice number, invoice date, total, VAT amount, VAT rate, VAT ID, tax number and exemption reason, using rule-based patterns for German and English.
 - Detects the invoice language and reads amounts in the right format: `1.785,00` on a German invoice and `1,785.00` on an English one are both stored as `1785.00`.
+- Detects the currency from the symbols and codes on the invoice (€, EUR, $, USD, £, GBP, CHF). German invoices with no marker default to EUR. Amounts are shown the way the invoice wrote them, so `1.785,00 €` and `$1,200.00`.
 - Flags missing mandatory fields. You can fix them in the form, and the invoice becomes ready to upload as soon as they are filled in.
 - Blocks duplicates across saved and rejected invoices.
+- Saved invoices can be edited and deleted, and rejected ones deleted, from the tables.
+- Keeps an invoice history: every accepted or rejected invoice is recorded with its fields, tags, reason and a link to the original file. Editing or deleting an invoice later does not change its history row.
 - Tags invoices by keyword (consulting, software, travel, food, office).
-- Exports saved or rejected invoices to Excel, filtered by processing date or issue date. Amounts are real number cells, so they can be summed.
+- One date filter (by processing date or issue date) narrows the Saved, Rejected and History tables and the Excel export. Either end of the range can be left open.
+- Exports saved or rejected invoices to Excel. Amounts are real number cells, so they can be summed, with the currency in its own column.
 
 ## Tech stack
 
@@ -22,7 +26,7 @@ Upload a German or English invoice (PDF or scanned image), check the fields the 
 | Database | SQLite |
 | Export | openpyxl |
 | Frontend | React, axios, react-toastify |
-| Tests | pytest |
+| Tests | pytest (backend), Jest and React Testing Library (frontend) |
 
 ## Run locally
 
@@ -44,7 +48,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-The API runs on http://127.0.0.1:8000, and interactive docs are at http://127.0.0.1:8000/docs. The SQLite database (`invoices.db`) is created next to `main.py` on first start.
+The API runs on http://127.0.0.1:8000, and interactive docs are at http://127.0.0.1:8000/docs. The SQLite database (`invoices.db`) is created next to `main.py` on first start, and uploaded invoice files are kept in `backend/uploads/`. Both are git-ignored.
 
 ### Frontend
 
@@ -60,10 +64,13 @@ The app opens on http://localhost:3000. To use a different backend address, set 
 
 ```bash
 cd backend
-pytest
+pytest                              # 38 tests
+
+cd frontend
+npm test -- --watchAll=false        # 17 tests
 ```
 
-The tests cover amount and date parsing in both formats, keyword tagging, and field extraction from sample German and English invoice text.
+Backend tests cover amount, date and currency parsing in both formats, field extraction from sample German and English invoices, and every API endpoint against a throwaway database. Frontend tests cover number and date formatting, the date filter, editing and deleting, the history file links, and fixing a rejected invoice before upload.
 
 ## API endpoints
 
@@ -72,10 +79,12 @@ The tests cover amount and date parsing in both formats, keyword tagging, and fi
 | POST | `/extract_fields` | Upload a PDF or image and get the extracted fields back |
 | POST | `/save_invoice` | Save a reviewed invoice |
 | POST | `/reject_invoice` | Store a rejected invoice with its reason |
-| GET | `/get_invoices` | List saved and rejected invoices |
-| POST | `/export_excel` | Download saved or rejected invoices for a date range as .xlsx |
-| PUT | `/update_invoice/{id}` | Update fields of a saved invoice (API only, no UI yet) |
-| DELETE | `/delete_invoice/{id}` | Delete a saved invoice (API only, no UI yet) |
+| GET | `/get_invoices` | List saved invoices, rejected invoices and the invoice history |
+| PUT | `/update_invoice/{id}` | Edit fields of a saved invoice |
+| DELETE | `/delete_invoice/{id}` | Delete a saved invoice |
+| DELETE | `/delete_rejected/{id}` | Delete a rejected invoice |
+| GET | `/files/{history_id}` | Open the original file of a history entry |
+| POST | `/export_excel` | Download saved or rejected invoices as .xlsx, optionally for a date range |
 
 ## Project structure
 
@@ -88,12 +97,14 @@ invoice-tool/
 │   ├── database.py        # SQLite access and Excel export
 │   ├── check_schema.py    # Prints the table columns, for debugging
 │   ├── requirements.txt
-│   └── tests/
+│   ├── uploads/           # Original invoice files (created at runtime, git-ignored)
+│   └── tests/             # test_parser.py, test_api.py
 ├── frontend/
 │   └── src/
 │       ├── App.js         # State and API calls
-│       ├── format.js      # Number and date display helpers
-│       └── components/    # UploadCard, ExtractedFields, InvoiceTable
+│       ├── format.js      # Number, currency and date helpers
+│       ├── *.test.js      # Frontend tests
+│       └── components/    # UploadCard, ExtractedFields, InvoiceTable, EditInvoiceModal
 ```
 
 ## Design decisions
@@ -102,12 +113,15 @@ invoice-tool/
 - **Amount format comes from the number.** Whichever of `.` or `,` comes last is the decimal separator. The detected language only decides the truly ambiguous case, like `1.234`.
 - **One list of mandatory fields.** The backend defines it once and sends it with every extraction result, so the frontend and backend always agree.
 - **Column names are allow-listed.** User input never ends up in SQL as a column name.
-- **Rejected invoices are kept.** They go to a separate table with the reason, so there's an audit trail.
+- **The history is append-only.** The Saved and Rejected tables are working lists you can edit and clean up. The history table is never edited or deleted, so it stays a reliable record of what was decided and why.
+- **Stored files can't be reached by path.** Uploads get a random name, and the file link goes through the history ID, so a request can't point at other files on the server.
 
 ## Limitations
 
 - Extraction is rule-based. Invoice layouts the patterns don't cover will come back with missing fields for manual review.
 - Dates with slashes are read day-first (`05/03/2024` is 5 March), which suits EU invoices.
+- `$` is read as US dollars. For other dollar currencies, correct the Currency field before saving.
+- A file is stored as soon as you click Proceed. Files for invoices that are never saved or rejected stay in `backend/uploads/`.
 - No user accounts. It's meant to run locally.
 
 ## Author
