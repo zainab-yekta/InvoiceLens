@@ -1,10 +1,11 @@
 import React from 'react';
 import { FIELD_LABELS, AMOUNT_FIELDS, formatAmount, formatDate } from '../format';
 
-const WIDE_FIELDS = { invoice_number: 'span-2', exemption_reason: 'span-4' };
+const WIDE_FIELDS = { invoice_number: 'span-2', exemption_reason: 'span-3' };
 
-function displayValue(key, value, language) {
-  if (AMOUNT_FIELDS.includes(key)) return formatAmount(value, language);
+function displayValue(key, value, fields, language) {
+  if (AMOUNT_FIELDS.includes(key)) return formatAmount(value, language, fields.currency);
+  if (key === 'currency') return value ? value.toUpperCase() : '–';
   if (key === 'date') return formatDate(value);
   if (key === 'vat_percent' && value) return `${value} %`;
   return value || '–';
@@ -64,9 +65,10 @@ function ExtractedFields({
                 </span>
                 <input
                   type="text"
+                  aria-label={FIELD_LABELS[key]}
                   className={isMissing ? 'input-missing' : ''}
                   readOnly={!editMode}
-                  value={editMode ? fields[key] ?? '' : displayValue(key, fields[key], extracted.language)}
+                  value={editMode ? fields[key] ?? '' : displayValue(key, fields[key], fields, extracted.language)}
                   onChange={(e) => onChange(key, e.target.value)}
                 />
               </label>

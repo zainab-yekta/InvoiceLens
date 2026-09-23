@@ -75,11 +75,11 @@ body {
   align-items: start;
 }
 
+/* Saved, Rejected and History each get the full width so no column is cut off */
 .grid-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  align-items: start;
 }
 
 /* Cards */
@@ -105,6 +105,12 @@ body {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
+}
+
+.card-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
 }
 
 .card-body {
@@ -193,6 +199,12 @@ body {
 
 .btn-ghost:hover {
   color: var(--text);
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  border-width: 1px;
 }
 
 .btn-block {
@@ -329,6 +341,10 @@ body {
   grid-column: span 2;
 }
 
+.span-3 {
+  grid-column: span 3;
+}
+
 .span-4 {
   grid-column: span 4;
 }
@@ -429,8 +445,16 @@ body {
 }
 
 .export-bar-title {
+  display: flex;
+  flex-direction: column;
   font-weight: 600;
   margin-right: auto;
+}
+
+.export-bar-hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 400;
 }
 
 .export-bar label {
@@ -461,9 +485,29 @@ td {
   white-space: nowrap;
 }
 
-td:last-child {
+td.cell-wrap {
   white-space: normal;
-  min-width: 150px;
+  min-width: 160px;
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.file-link {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  color: var(--brand-dark);
+  font-weight: 500;
+}
+
+td .status-pill {
+  font-size: 0.8rem;
+  padding: 2px 10px;
 }
 
 th {
@@ -474,8 +518,25 @@ th {
   z-index: 1;
 }
 
+tbody tr {
+  background: #fff;
+}
+
 tbody tr:nth-child(even) {
   background: #fafcfd;
+}
+
+/* Pinned Actions column: stays visible while the rest of the table scrolls sideways */
+.cell-sticky {
+  position: sticky;
+  right: 0;
+  background: inherit;
+  box-shadow: -6px 0 8px -6px rgba(16, 42, 60, 0.18);
+}
+
+th.cell-sticky {
+  background: #fff;
+  z-index: 2;
 }
 
 tbody tr:hover {
@@ -488,10 +549,39 @@ tbody tr:hover {
   padding: 32px 14px;
 }
 
+/* Edit dialog */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(16, 42, 60, 0.45);
+}
+
+.modal {
+  width: 100%;
+  max-width: 760px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+
+.modal .card-footer {
+  gap: 10px;
+}
+
+.modal-hint {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 /* Smaller screens */
 @media (max-width: 1100px) {
-  .grid-top,
-  .grid-bottom {
+  .grid-top {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -519,6 +609,7 @@ tbody tr:hover {
   }
 
   .span-2,
+  .span-3,
   .span-4 {
     grid-column: span 2;
   }
