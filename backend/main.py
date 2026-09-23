@@ -14,9 +14,9 @@ from pdf_utils import extract_text, SUPPORTED_EXTENSIONS
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("invoice_tool")
+logger = logging.getLogger("invoicelens")
 
-app = FastAPI(title="Invoice Tool")
+app = FastAPI(title="InvoiceLens")
 init_db()
 SUPPORTED_LANGUAGES = ['en', 'de']  # English and German for now
 UNKNOWN_INVOICE_NUMBER = "UNKNOWN"

@@ -15,7 +15,7 @@ const LANGUAGE_NAMES = { de: 'German', en: 'English' };
 // Tags are stored as "food, travel"; show each one as a small chip
 function TagList({ tags }) {
   const list = (tags || '').split(',').map((t) => t.trim()).filter(Boolean);
-  if (list.length === 0) return '–';
+  if (list.length === 0) return '';
   return (
     <span className="tag-list">
       {list.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
@@ -210,8 +210,8 @@ function App() {
     { label: 'Invoice No', render: (inv) => inv.invoice_number },
     { label: 'Tags', render: (inv) => <TagList tags={inv.tags} /> },
     { label: 'Issue Date', render: (inv) => formatDate(inv.issue_date) },
-    { label: 'Tax No', render: (inv) => inv.tax_number || '–' },
-    { label: 'VAT %', render: (inv) => (inv.vat_percent ? `${inv.vat_percent} %` : '–') },
+    { label: 'Tax No', render: (inv) => inv.tax_number || '' },
+    { label: 'VAT %', render: (inv) => (inv.vat_percent ? `${inv.vat_percent} %` : '') },
     { label: 'VAT Amount', render: (inv) => formatAmount(inv.vat_amount, inv.language, inv.currency) },
     { label: 'Total', render: (inv) => <b>{formatAmount(inv.total_amount, inv.language, inv.currency)}</b> },
     {
@@ -234,9 +234,9 @@ function App() {
   const rejectedColumns = [
     { label: '#', render: (_, idx) => idx + 1 },
     { label: 'Rejection Date', render: (inv) => formatDate(inv.rejection_date) },
-    { label: 'Invoice No', render: (inv) => inv.invoice_number || '–' },
+    { label: 'Invoice No', render: (inv) => inv.invoice_number || '' },
     { label: 'Issue Date', render: (inv) => formatDate(inv.issue_date) },
-    { label: 'Reason', render: (inv) => inv.reason || '–', wrap: true },
+    { label: 'Reason', render: (inv) => inv.reason || '', wrap: true },
     {
       label: 'Actions',
       sticky: true,
@@ -262,12 +262,12 @@ function App() {
         </span>
       ),
     },
-    { label: 'Invoice No', render: (h) => h.invoice_number || '–' },
+    { label: 'Invoice No', render: (h) => h.invoice_number || '' },
     { label: 'Issue Date', render: (h) => formatDate(h.issue_date) },
     { label: 'Total', render: (h) => formatAmount(h.total_amount, h.language, h.currency) },
-    { label: 'Language', render: (h) => LANGUAGE_NAMES[h.language] || (h.language || '–').toUpperCase() },
+    { label: 'Language', render: (h) => LANGUAGE_NAMES[h.language] || (h.language || '').toUpperCase() },
     { label: 'Tags', render: (h) => <TagList tags={h.tags} /> },
-    { label: 'Reason', render: (h) => h.reason || '–', wrap: true },
+    { label: 'Reason', render: (h) => h.reason || '', wrap: true },
     {
       label: 'Original File',
       render: (h) => (h.has_file ? (
@@ -280,7 +280,7 @@ function App() {
         >
           {h.original_filename || 'Open file'}
         </a>
-      ) : '–'),
+      ) : ''),
     },
   ];
 
@@ -289,7 +289,7 @@ function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Invoice Tool</h1>
+        <h1>InvoiceLens</h1>
         <p>Extract, review and export German and English invoices</p>
       </header>
 

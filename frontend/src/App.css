@@ -381,6 +381,12 @@ body {
   background: var(--card-head-bg);
 }
 
+.field input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.8;
+}
+
 .field input:focus,
 .export-bar select:focus,
 .export-bar input:focus {

@@ -20,7 +20,7 @@ describe('formatAmount', () => {
 
   test('shows old unparsable values and blanks as they are', () => {
     expect(formatAmount('1.200.00', 'de', 'EUR')).toBe('1.200.00');
-    expect(formatAmount('', 'de', 'EUR')).toBe('–');
+    expect(formatAmount('', 'de', 'EUR')).toBe('');
   });
 });
 
@@ -28,7 +28,7 @@ test('formatDate turns ISO dates into dd.mm.yyyy', () => {
   expect(formatDate('2025-07-28')).toBe('28.07.2025');
   expect(formatDate('2025-07-28T21:06:51.123')).toBe('28.07.2025');
   expect(formatDate('2014.04.22')).toBe('2014.04.22');
-  expect(formatDate('')).toBe('–');
+  expect(formatDate('')).toBe('');
 });
 
 describe('inDateRange', () => {

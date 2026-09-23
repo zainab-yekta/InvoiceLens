@@ -1,4 +1,4 @@
-# Invoice Tool: frontend
+# InvoiceLens frontend
 
 React app for uploading invoices, reviewing the extracted fields and exporting results. See the [main README](../README.md) for the full setup.
 

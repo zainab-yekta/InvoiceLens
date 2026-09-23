@@ -15,7 +15,7 @@ export const AMOUNT_FIELDS = ['total_amount', 'vat_amount'];
 // Amounts are stored as plain numbers ("1785.00"); show them the way the invoice wrote them.
 // German invoices get "1.785,00 €" and English ones get "$1,785.00".
 export function formatAmount(value, language, currency) {
-  if (value === null || value === undefined || value === '') return '–';
+  if (value === null || value === undefined || value === '') return '';
   const number = Number(value);
   if (Number.isNaN(number)) return value;
 
@@ -34,7 +34,7 @@ export function formatAmount(value, language, currency) {
 
 // "2025-07-28" or "2025-07-28T21:06:51" -> "28.07.2025"
 export function formatDate(value) {
-  if (!value) return '–';
+  if (!value) return '';
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : value;
 }

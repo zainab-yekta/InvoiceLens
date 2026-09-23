@@ -5,10 +5,10 @@ const WIDE_FIELDS = { invoice_number: 'span-2', exemption_reason: 'span-3' };
 
 function displayValue(key, value, fields, language) {
   if (AMOUNT_FIELDS.includes(key)) return formatAmount(value, language, fields.currency);
-  if (key === 'currency') return value ? value.toUpperCase() : '–';
+  if (key === 'currency') return value ? value.toUpperCase() : '';
   if (key === 'date') return formatDate(value);
   if (key === 'vat_percent' && value) return `${value} %`;
-  return value || '–';
+  return value || '';
 }
 
 function ExtractedFields({
@@ -68,6 +68,7 @@ function ExtractedFields({
                   aria-label={FIELD_LABELS[key]}
                   className={isMissing ? 'input-missing' : ''}
                   readOnly={!editMode}
+                  placeholder={editMode ? '' : 'Not found'}
                   value={editMode ? fields[key] ?? '' : displayValue(key, fields[key], fields, extracted.language)}
                   onChange={(e) => onChange(key, e.target.value)}
                 />

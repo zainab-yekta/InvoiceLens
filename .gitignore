@@ -1,4 +1,4 @@
-# .gitignore for Invoice Tool
+# .gitignore for InvoiceLens
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,5 +15,5 @@ build/
 
 # Personal notes and design mockups (kept locally, not published)
 *.docx
-final look.JPG
+old look.JPG
 .pytest_cache/
