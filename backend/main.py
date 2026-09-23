@@ -43,7 +43,16 @@ def clean_fields(fields: dict, language: str) -> dict:
         fields["currency"] = str(fields.get("currency") or "").strip().upper()
     if "invoice_number" in fields:
         fields["invoice_number"] = str(fields.get("invoice_number") or "").strip()
+    if "tags" in fields:
+        fields["tags"] = ", ".join(clean_tags(fields["tags"]))
     return fields
+
+
+def clean_tags(tags) -> list:
+    """Tags arrive as a list from extraction or as "food, travel" from the edit form."""
+    if isinstance(tags, str):
+        tags = tags.split(",")
+    return [t.strip().lower() for t in tags or [] if str(t).strip()]
 
 
 def record_history(status: str, reason: str, fields: dict, data: dict):
@@ -53,7 +62,7 @@ def record_history(status: str, reason: str, fields: dict, data: dict):
             status, reason, fields,
             language=data.get("language", ""),
             used_ocr=data.get("used_ocr", False),
-            tags=data.get("tags") or [],
+            tags=clean_tags(data.get("tags")),
             original_filename=data.get("original_filename", ""),
             stored_filename=data.get("upload_id"),
         )
@@ -108,7 +117,7 @@ async def save_invoice_api(data: dict = Body(...)):
         raise HTTPException(status_code=409, detail="Invoice already exists in accepted or rejected invoices.")
 
     try:
-        save_invoice(fields, used_ocr=bool(data.get("used_ocr")), language=language)
+        save_invoice(fields, used_ocr=bool(data.get("used_ocr")), language=language, tags=clean_tags(data.get("tags")))
     except Exception:
         logger.exception("Could not save invoice %s", invoice_number)
         raise HTTPException(status_code=500, detail="Could not save the invoice.")

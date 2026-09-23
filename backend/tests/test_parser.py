@@ -49,10 +49,32 @@ def test_detect_currency(text, language, expected):
     assert detect_currency(text, language) == expected
 
 
-def test_tags_match_word_starts_only():
-    assert assign_tags("Reisekosten nach Berlin") == ["travel"]
-    assert "travel" not in assign_tags("Alle Preise inkl. MwSt")
-    assert "food" not in assign_tags("Rechnungsadressen")
+@pytest.mark.parametrize("text, expected", [
+    ("Reisekosten nach Berlin", ["travel"]),
+    ("2x Laptop Dell, 1x Monitor 27 Zoll", ["electronics"]),
+    ("Business lunch at Restaurant Roma", ["food"]),
+    ("Bewirtung von Geschäftspartnern", ["food"]),
+    ("Microsoft 365 subscription, 12 months", ["software"]),
+    ("Toner and copy paper", ["office"]),
+    ("Glasfaser Internet 500 Mbit", ["telecom"]),
+    ("Diesel 45 Liter, Tankstelle Nord", ["vehicle"]),
+    ("Hotel Adlon, 2 nights, and flight to Munich", ["travel"]),
+    ("Beratung und Softwarelizenz", ["consulting", "software"]),
+    ("Payment due within 14 days", ["uncategorized"]),
+])
+def test_tags(text, expected):
+    assert assign_tags(text) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "Alle Preise inkl. MwSt",               # "reise" inside "Preise"
+    "Musterstraße 1, 45127 Essen",          # Essen is also a city
+    "Bahnhofstraße 5, Flughafenstraße 9",   # street names
+    "Registered office: 1 High Street",     # standard UK footer
+    "Server monitoring service",            # not a monitor
+])
+def test_tags_ignore_look_alikes(text):
+    assert assign_tags(text) == ["uncategorized"]
 
 
 GERMAN_INVOICE = """

@@ -12,6 +12,17 @@ axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000
 
 const LANGUAGE_NAMES = { de: 'German', en: 'English' };
 
+// Tags are stored as "food, travel"; show each one as a small chip
+function TagList({ tags }) {
+  const list = (tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+  if (list.length === 0) return '–';
+  return (
+    <span className="tag-list">
+      {list.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+    </span>
+  );
+}
+
 function App() {
   const [file, setFile] = useState(null);
   const [extracted, setExtracted] = useState(null);
@@ -197,6 +208,7 @@ function App() {
     { label: '#', render: (_, idx) => idx + 1 },
     { label: 'Processing Date', render: (inv) => formatDate(inv.processing_date) },
     { label: 'Invoice No', render: (inv) => inv.invoice_number },
+    { label: 'Tags', render: (inv) => <TagList tags={inv.tags} /> },
     { label: 'Issue Date', render: (inv) => formatDate(inv.issue_date) },
     { label: 'Tax No', render: (inv) => inv.tax_number || '–' },
     { label: 'VAT %', render: (inv) => (inv.vat_percent ? `${inv.vat_percent} %` : '–') },
@@ -254,7 +266,7 @@ function App() {
     { label: 'Issue Date', render: (h) => formatDate(h.issue_date) },
     { label: 'Total', render: (h) => formatAmount(h.total_amount, h.language, h.currency) },
     { label: 'Language', render: (h) => LANGUAGE_NAMES[h.language] || (h.language || '–').toUpperCase() },
-    { label: 'Tags', render: (h) => h.tags || '–', wrap: true },
+    { label: 'Tags', render: (h) => <TagList tags={h.tags} /> },
     { label: 'Reason', render: (h) => h.reason || '–', wrap: true },
     {
       label: 'Original File',

@@ -14,7 +14,7 @@ const DATA = {
     {
       id: 2, processing_date: '2025-06-01T10:00:00', invoice_number: 'RE-2', issue_date: '2025-05-20',
       tax_number: '12/345', vat_percent: '19', vat_amount: '285.00', total_amount: '1785.00',
-      language: 'de', currency: 'EUR',
+      language: 'de', currency: 'EUR', tags: 'consulting, software',
     },
     {
       id: 1, processing_date: '2025-01-10T09:00:00', invoice_number: 'INV-1', issue_date: '2024-12-30',
@@ -61,6 +61,13 @@ test('amounts show the currency in the format of each invoice', async () => {
   const saved = await renderLoaded();
   expect(within(saved).getByText(/1\.785,00\s€/)).toBeInTheDocument();
   expect(within(saved).getByText('$1,200.00')).toBeInTheDocument();
+});
+
+test('saved invoices show their tags', async () => {
+  const saved = await renderLoaded();
+  const row = within(saved).getByText('RE-2').closest('tr');
+  expect(within(row).getByText('consulting')).toBeInTheDocument();
+  expect(within(row).getByText('software')).toBeInTheDocument();
 });
 
 test('the date filter narrows all three tables', async () => {
@@ -118,8 +125,11 @@ test('saved invoices can be edited and deleted, rejected ones deleted', async ()
   fireEvent.click(within(saved).getAllByRole('button', { name: 'Edit' })[0]);
   const dialog = screen.getByRole('dialog', { name: 'Edit invoice' });
   fireEvent.change(within(dialog).getByLabelText('Total Amount'), { target: { value: '2.000,00' } });
+  fireEvent.change(within(dialog).getByLabelText(/^Tags/), { target: { value: 'consulting' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(axios.put).toHaveBeenCalledWith('/update_invoice/2', { total_amount: '2.000,00' }));
+  await waitFor(() => expect(axios.put).toHaveBeenCalledWith(
+    '/update_invoice/2', { total_amount: '2.000,00', tags: 'consulting' },
+  ));
 
   fireEvent.click(within(saved).getAllByRole('button', { name: 'Delete' })[1]);
   await waitFor(() => expect(axios.delete).toHaveBeenCalledWith('/delete_invoice/1'));

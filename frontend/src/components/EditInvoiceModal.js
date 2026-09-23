@@ -10,8 +10,11 @@ const EDIT_FIELDS = [
   ['vat_id', 'VAT ID'],
   ['vat_percent', 'VAT %'],
   ['vat_amount', 'VAT Amount'],
+  ['tags', 'Tags (comma separated, e.g. food, travel)'],
   ['exemption_reason', 'Exemption Reason'],
 ];
+
+const FULL_WIDTH = ['tags', 'exemption_reason'];
 
 function EditInvoiceModal({ invoice, onSave, onClose, saving }) {
   const [values, setValues] = useState(() =>
@@ -45,7 +48,7 @@ function EditInvoiceModal({ invoice, onSave, onClose, saving }) {
           </p>
           <div className="field-grid">
             {EDIT_FIELDS.map(([key, label]) => (
-              <label className={`field ${key === 'exemption_reason' ? 'span-4' : ''}`} key={key}>
+              <label className={`field ${FULL_WIDTH.includes(key) ? 'span-4' : ''}`} key={key}>
                 <span className="field-label">{label}</span>
                 <input
                   type="text"

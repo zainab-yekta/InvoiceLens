@@ -35,6 +35,7 @@ def test_save_cleans_german_values_and_records_history():
     assert response.status_code == 200
 
     saved = invoices()["accepted"][0]
+    assert saved["tags"] == "consulting"
     assert saved["total_amount"] == "1785.00"
     assert saved["issue_date"] == "2025-07-28"
     assert saved["currency"] == "EUR"
@@ -82,6 +83,9 @@ def test_edit_saved_invoice():
     assert saved["total_amount"] == "2000.50"
     assert saved["currency"] == "CHF"
 
+    assert client.put(f"/update_invoice/{invoice_id}", json={"tags": "Food, travel , "}).status_code == 200
+    assert invoices()["accepted"][0]["tags"] == "food, travel"
+
     assert client.put(f"/update_invoice/{invoice_id}", json={"total_amount": ""}).status_code == 400
     assert client.put(f"/update_invoice/{invoice_id}", json={"id = 1, tax_number": "x"}).status_code == 400
     assert client.put("/update_invoice/9999", json={"vat_id": "x"}).status_code == 404
@@ -123,6 +127,7 @@ def test_export_date_filter():
     rows = exported_rows(date_type="issue_date", from_date="2025-01-01")
     assert [r[2] for r in rows] == ["RE-1"]
     assert rows[0][8] == 1785.0 and rows[0][9] == "EUR"
+    assert not rows[0][10]  # Tags column is empty: no tags were sent in this test
     assert [r[2] for r in exported_rows(date_type="issue_date", to_date="2024-12-31")] == ["RE-2"]
 
 

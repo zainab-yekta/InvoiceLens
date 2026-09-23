@@ -115,24 +115,38 @@ def normalize_date(value):
     return value
 
 
-def assign_tags(text):
-    tags = []
-    tag_keywords = {
-        "consulting": ["consulting", "advisory", "berater", "beratung"],
-        "software": ["software", "lizenz", "license"],
-        "travel": ["reise", "flug", "bahn"],
-        "food": ["essen", "lebensmittel", "verpflegung"],
-        "office": ["büro", "office", "stationery"]
-    }
+# Keyword patterns per category, English and German. Each one is matched at the start of a word,
+# so "Reisekosten" counts as travel but "Preise" does not. Some words need a guard because they
+# also show up in addresses and footers: "Essen" is a city, "Bahnhofstraße" and "Flughafenstraße"
+# are streets, and "Registered office" is on most UK invoices.
+TAG_KEYWORDS = {
+    "consulting": [r"consulting", r"advisory", r"berater", r"beratung", r"coaching"],
+    "software": [r"software", r"lizenz", r"licen[cs]e", r"subscription", r"abonnement", r"saas\b",
+                 r"hosting", r"cloud"],
+    "electronics": [r"computer", r"laptop", r"monitor(?!ing)", r"bildschirm", r"drucker\b", r"printer\b",
+                    r"hardware", r"tastatur", r"keyboard", r"maus\b", r"mouse\b", r"smartphone", r"tablet\b",
+                    r"headset", r"festplatte", r"ssd\b", r"grafikkarte"],
+    "travel": [r"reise", r"flug(?!hafen)", r"flight", r"hotel", r"übernachtung", r"taxi", r"mietwagen",
+               r"car rental", r"bahnticket", r"bahnfahrt", r"fahrkarte", r"zugticket", r"train ticket", r"airline"],
+    "food": [r"lebensmittel", r"verpflegung", r"restaurant", r"catering", r"speisen", r"getränke",
+             r"bewirtung", r"mittagessen", r"abendessen", r"frühstück", r"meal", r"food\b", r"lunch",
+             r"dinner", r"breakfast", r"beverage", r"kaffee", r"coffee"],
+    "office": [r"bürobedarf", r"büromaterial", r"büroartikel", r"office supplies", r"stationery",
+               r"schreibwaren", r"toner", r"druckerpapier", r"copy paper", r"printer paper", r"ordner\b"],
+    "telecom": [r"mobilfunk", r"dsl\b", r"glasfaser", r"broadband", r"mobile plan", r"sim[- ]kart",
+                r"sim card", r"telekommunikation", r"telecommunication"],
+    "vehicle": [r"kraftstoff", r"benzin", r"diesel\b", r"fuel\b", r"petrol", r"tankstelle", r"parkgebühr",
+                r"parking", r"kfz", r"werkstatt", r"car repair"],
+}
 
+
+def assign_tags(text):
     text = text.lower()
-    for tag, keywords in tag_keywords.items():
-        # Match at the start of a word, so "Reisekosten" counts but "Preise" does not
-        if any(re.search(r"\b" + re.escape(keyword), text) for keyword in keywords):
-            tags.append(tag)
-    if not tags:
-        tags.append("uncategorized")
-    return tags
+    tags = [
+        tag for tag, patterns in TAG_KEYWORDS.items()
+        if any(re.search(r"\b" + pattern, text) for pattern in patterns)
+    ]
+    return tags or ["uncategorized"]
 
 
 def missing_mandatory_fields(fields: dict) -> list:

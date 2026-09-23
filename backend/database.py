@@ -18,13 +18,13 @@ UPLOAD_DIR = os.environ.get("INVOICE_UPLOAD_DIR", os.path.join(BASE_DIR, "upload
 DATE_COLUMNS = {"processing_date", "issue_date"}
 EDITABLE_COLUMNS = {
     "invoice_number", "issue_date", "tax_number", "vat_percent", "vat_amount",
-    "vat_id", "total_amount", "exemption_reason", "currency",
+    "vat_id", "total_amount", "exemption_reason", "currency", "tags",
 }
 
 ACCEPTED_COLUMNS = [
     "id", "processing_date", "invoice_number", "issue_date",
     "tax_number", "vat_percent", "vat_amount", "vat_id",
-    "total_amount", "exemption_reason", "used_ocr", "language", "currency"
+    "total_amount", "exemption_reason", "used_ocr", "language", "currency", "tags"
 ]
 
 REJECTED_COLUMNS = ["id", "processing_date", "rejection_date", "invoice_number", "issue_date", "reason"]
@@ -71,10 +71,11 @@ def init_db():
             reason TEXT,
             used_ocr BOOLEAN,
             language TEXT,
-            currency TEXT
+            currency TEXT,
+            tags TEXT
         )
     ''')
-    _add_missing_columns(cur, "invoices", {"language": "TEXT", "currency": "TEXT"})
+    _add_missing_columns(cur, "invoices", {"language": "TEXT", "currency": "TEXT", "tags": "TEXT"})
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS rejected_invoices (
@@ -114,7 +115,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_invoice(fields, accepted=True, reason="", used_ocr=False, language=""):
+def save_invoice(fields, accepted=True, reason="", used_ocr=False, language="", tags=None):
     conn = _connect()
     cur = conn.cursor()
     now = datetime.now().isoformat()
@@ -122,8 +123,8 @@ def save_invoice(fields, accepted=True, reason="", used_ocr=False, language=""):
     cur.execute('''
         INSERT INTO invoices (
             processing_date, invoice_number, issue_date, tax_number, vat_percent, vat_amount, vat_id,
-            total_amount, exemption_reason, accepted, reason, used_ocr, language, currency
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_amount, exemption_reason, accepted, reason, used_ocr, language, currency, tags
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         now,
         fields.get("invoice_number", ""),
@@ -139,6 +140,7 @@ def save_invoice(fields, accepted=True, reason="", used_ocr=False, language=""):
         int(used_ocr),
         language,
         fields.get("currency", ""),
+        ", ".join(tags or []),
     ))
     conn.commit()
     conn.close()
@@ -300,12 +302,12 @@ def export_invoices_to_excel(invoice_type: str, from_date=None, to_date=None, da
         where = conditions
     else:
         sheet.title = "accepted-invoice"
-        headers = ["ID", "Processing Date", "Invoice Number", "Issue Date", "Tax Number", "VAT %", "VAT Amount", "VAT ID", "Total", "Currency", "Exemption Reason"]
+        headers = ["ID", "Processing Date", "Invoice Number", "Issue Date", "Tax Number", "VAT %", "VAT Amount", "VAT ID", "Total", "Currency", "Tags", "Exemption Reason"]
         # column index -> Excel number format
         number_columns = {5: "0", 6: "#,##0.00", 8: "#,##0.00"}
         query = """
             SELECT id, processing_date, invoice_number, issue_date, tax_number, vat_percent,
-                   vat_amount, vat_id, total_amount, currency, exemption_reason
+                   vat_amount, vat_id, total_amount, currency, tags, exemption_reason
             FROM invoices
         """
         where = ["accepted = 1"] + conditions
