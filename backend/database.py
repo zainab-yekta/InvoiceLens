@@ -1,10 +1,26 @@
+import os
 import sqlite3
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
-DB_NAME = "invoices.db"
+# Always use the DB next to this file, no matter which folder uvicorn is started from
+DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "invoices.db")
+
+# Column names can't be passed as SQL parameters, so only these are ever put into a query
+DATE_COLUMNS = {"processing_date", "issue_date"}
+EDITABLE_COLUMNS = {
+    "invoice_number", "issue_date", "tax_number", "vat_percent", "vat_amount",
+    "vat_id", "total_amount", "exemption_reason",
+}
+
+ACCEPTED_COLUMNS = [
+    "id", "processing_date", "invoice_number", "issue_date",
+    "tax_number", "vat_percent", "vat_amount", "vat_id",
+    "total_amount", "exemption_reason", "used_ocr", "language"
+]
+
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -24,9 +40,15 @@ def init_db():
             exemption_reason TEXT,
             accepted BOOLEAN,
             reason TEXT,
-            used_ocr BOOLEAN
+            used_ocr BOOLEAN,
+            language TEXT
         )
     ''')
+
+    # Older databases were created before the language column existed
+    columns = [row[1] for row in cur.execute("PRAGMA table_info(invoices)")]
+    if "language" not in columns:
+        cur.execute("ALTER TABLE invoices ADD COLUMN language TEXT")
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS rejected_invoices (
@@ -42,7 +64,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_invoice(fields, accepted=True, reason="", used_ocr=False):
+def save_invoice(fields, accepted=True, reason="", used_ocr=False, language=""):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     now = datetime.now().isoformat()
@@ -50,8 +72,8 @@ def save_invoice(fields, accepted=True, reason="", used_ocr=False):
     cur.execute('''
         INSERT INTO invoices (
             processing_date, invoice_number, issue_date, tax_number, vat_percent, vat_amount, vat_id,
-            total_amount, exemption_reason, accepted, reason, used_ocr
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_amount, exemption_reason, accepted, reason, used_ocr, language
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         now,
         fields.get("invoice_number", ""),
@@ -64,7 +86,8 @@ def save_invoice(fields, accepted=True, reason="", used_ocr=False):
         fields.get("exemption_reason", ""),
         int(accepted),
         reason if not accepted else "",
-        int(used_ocr)
+        int(used_ocr),
+        language
     ))
     conn.commit()
     conn.close()
@@ -73,27 +96,20 @@ def get_all_invoices():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
-    accepted = cur.execute("SELECT * FROM invoices WHERE accepted=1").fetchall()
-    rejected = cur.execute("SELECT id, processing_date, rejection_date, invoice_number, issue_date, reason FROM rejected_invoices").fetchall()
-
-    accepted_keys = [
-        "id", "processing_date", "invoice_number", "issue_date", 
-        "tax_number", "vat_percent", "vat_amount", "vat_id", 
-        "total_amount", "exemption_reason", "accepted", "reason", "used_ocr"
-    ]
-
-    def safe_dict(row):
-        if len(row) != len(accepted_keys):
-            print(f"[ERROR] Expected {len(accepted_keys)} columns but got {len(row)}: {row}")
-            return None
-        return dict(zip(accepted_keys, row))
-
+    accepted = cur.execute(
+        f"SELECT {', '.join(ACCEPTED_COLUMNS)} FROM invoices WHERE accepted=1 ORDER BY id DESC"
+    ).fetchall()
+    rejected = cur.execute(
+        "SELECT id, processing_date, rejection_date, invoice_number, issue_date, reason "
+        "FROM rejected_invoices ORDER BY id DESC"
+    ).fetchall()
     conn.close()
+
     return {
-        "accepted": [r for r in (safe_dict(row) for row in accepted) if r],
+        "accepted": [dict(zip(ACCEPTED_COLUMNS, row)) for row in accepted],
         "rejected": [
             {
-                "index": row[0],
+                "id": row[0],
                 "processing_date": row[1],
                 "rejection_date": row[2],
                 "invoice_number": row[3],
@@ -127,12 +143,19 @@ def invoice_exists_in_any_table(invoice_number: str) -> bool:
     conn.close()
     return count_accepted > 0 or count_rejected > 0
 
+def _to_number(value):
+    """Amounts are stored as text like "1234.56"; Excel needs real numbers to sum them."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
 def export_invoices_to_excel(invoice_type: str, from_date: str, to_date: str, date_type: str = "processing_date"):
+    if date_type not in DATE_COLUMNS:
+        raise ValueError(f"Invalid date type: {date_type}")
+
     wb = Workbook()
     sheet = wb.active
-
-    headers = []
-    rows = []
 
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -140,22 +163,25 @@ def export_invoices_to_excel(invoice_type: str, from_date: str, to_date: str, da
     if invoice_type == "rejected":
         sheet.title = "rejected-invoice"
         headers = ["Index", "Processing Date", "Invoice Number", "Issue Date", "Reason"]
+        number_columns = {}
         query = f"""
             SELECT id, processing_date, invoice_number, issue_date, reason
             FROM rejected_invoices
             WHERE DATE({date_type}) BETWEEN ? AND ?
         """
-        rows = cur.execute(query, (from_date, to_date)).fetchall()
     else:
         sheet.title = "accepted-invoice"
         headers = ["ID", "Processing Date", "Invoice Number", "Issue Date", "Tax Number", "VAT %", "VAT Amount", "VAT ID", "Total", "Exemption Reason"]
+        # column index -> Excel number format
+        number_columns = {5: "0", 6: "#,##0.00", 8: "#,##0.00"}
         query = f"""
             SELECT id, processing_date, invoice_number, issue_date,  tax_number, vat_percent,
                    vat_amount, vat_id, total_amount, exemption_reason
             FROM invoices
             WHERE accepted = 1 AND DATE({date_type}) BETWEEN ? AND ?
         """
-        rows = cur.execute(query, (from_date, to_date)).fetchall()
+    rows = cur.execute(query, (from_date, to_date)).fetchall()
+    conn.close()
 
     sheet.append(headers)
 
@@ -166,17 +192,23 @@ def export_invoices_to_excel(invoice_type: str, from_date: str, to_date: str, da
         sheet.column_dimensions[cell.column_letter].width = 30
 
     for row in rows:
+        row = [_to_number(v) if i in number_columns else v for i, v in enumerate(row)]
         sheet.append(row)
-        for cell in sheet[sheet.max_row]:
+        for i, cell in enumerate(sheet[sheet.max_row]):
             cell.alignment = Alignment(horizontal="center")
+            if i in number_columns and isinstance(cell.value, float):
+                cell.number_format = number_columns[i]
 
-    conn.close()
     output = BytesIO()
     wb.save(output)
     output.seek(0)
     return output.read()
 
 def update_invoice_by_id(invoice_id: int, updated_fields: dict):
+    unknown = set(updated_fields) - EDITABLE_COLUMNS
+    if unknown or not updated_fields:
+        raise ValueError(f"Invalid fields: {', '.join(sorted(unknown)) or 'none given'}")
+
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     set_clause = ", ".join(f"{key} = ?" for key in updated_fields.keys())

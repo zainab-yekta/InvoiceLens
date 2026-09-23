@@ -3,6 +3,11 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from PIL import Image, ImageFilter, ImageOps
 import io
+import logging
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_EXTENSIONS = (".pdf", ".jpg", ".jpeg", ".png", ".bmp")
 
 def extract_text(file_bytes: bytes, filename: str) -> tuple[str, bool]:
     is_ocr_used = False
@@ -19,11 +24,11 @@ def extract_text(file_bytes: bytes, filename: str) -> tuple[str, bool]:
                     if page_text:
                         text += page_text + "\n"
         except Exception as e:
-            print(f"[pdfplumber] Error: {e}")
+            logger.warning("pdfplumber could not read the PDF: %s", e)
 
         # Fallback to OCR if PDF has no extractable text
         if len(text.strip()) < 30:
-            print("[OCR] Falling back to OCR for scanned PDF...")
+            logger.info("No text layer found, falling back to OCR")
             try:
                 images = convert_from_bytes(file_bytes)
                 for img in images:
@@ -32,7 +37,7 @@ def extract_text(file_bytes: bytes, filename: str) -> tuple[str, bool]:
                     text += ocr_text + "\n"
                 is_ocr_used = True
             except Exception as e:
-                print(f"[OCR] PDF fallback failed: {e}")
+                logger.error("OCR on PDF failed (are Tesseract and Poppler installed?): %s", e)
 
     # ---------- Case 2: Image Files ----------
     elif filename.endswith((".jpg", ".jpeg", ".png", ".bmp")):
@@ -45,6 +50,6 @@ def extract_text(file_bytes: bytes, filename: str) -> tuple[str, bool]:
             text = pytesseract.image_to_string(image)
             is_ocr_used = True
         except Exception as e:
-            print(f"[OCR] Image file extraction failed: {e}")
+            logger.error("OCR on image failed (is Tesseract installed?): %s", e)
 
     return text.strip(), is_ocr_used

@@ -1,6 +1,7 @@
 import sqlite3
+from database import DB_NAME
 
-conn = sqlite3.connect("invoices.db")
+conn = sqlite3.connect(DB_NAME)
 cur = conn.cursor()
 
 print("Checking schema of 'invoices' table...\n")
