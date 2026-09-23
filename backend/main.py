@@ -1,11 +1,13 @@
 import logging
+import os
 from fastapi import FastAPI, UploadFile, File, Form, Body, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from parser import extract_invoice_fields, missing_mandatory_fields, normalize_amount, normalize_date
 from database import (
     init_db, save_invoice, get_all_invoices, save_rejected_invoice, export_invoices_to_excel,
-    invoice_exists_in_any_table, update_invoice_by_id, delete_invoice_by_id, DATE_COLUMNS
+    invoice_exists_in_any_table, update_invoice_by_id, delete_invoice_by_id, delete_rejected_by_id,
+    get_invoice, store_upload, add_history, get_history_file, DATE_COLUMNS
 )
 from io import BytesIO
 from pdf_utils import extract_text, SUPPORTED_EXTENSIONS
@@ -27,10 +29,43 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+
+def clean_fields(fields: dict, language: str) -> dict:
+    """Fields may have been edited by hand, e.g. "1.785,00", "28.07.2025" or "eur"."""
+    fields = dict(fields)
+    for key in ("total_amount", "vat_amount"):
+        if key in fields:
+            fields[key] = normalize_amount(str(fields.get(key) or ""), language)
+    for key in ("date", "issue_date"):
+        if key in fields:
+            fields[key] = normalize_date(str(fields.get(key) or ""))
+    if "currency" in fields:
+        fields["currency"] = str(fields.get("currency") or "").strip().upper()
+    if "invoice_number" in fields:
+        fields["invoice_number"] = str(fields.get("invoice_number") or "").strip()
+    return fields
+
+
+def record_history(status: str, reason: str, fields: dict, data: dict):
+    """Log the decision; a failure here must never lose the invoice itself."""
+    try:
+        add_history(
+            status, reason, fields,
+            language=data.get("language", ""),
+            used_ocr=data.get("used_ocr", False),
+            tags=data.get("tags") or [],
+            original_filename=data.get("original_filename", ""),
+            stored_filename=data.get("upload_id"),
+        )
+    except Exception:
+        logger.exception("Could not write invoice history")
+
+
 @app.post("/extract_fields")
 async def extract_fields(file: UploadFile = File(...)):
     filename = file.filename or ""
-    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type. Please upload one of: {', '.join(SUPPORTED_EXTENSIONS)}"
@@ -53,19 +88,17 @@ async def extract_fields(file: UploadFile = File(...)):
 
     logger.info("Processed %s: status=%s, language=%s, ocr=%s", filename, result["status"], detected_lang, used_ocr)
 
+    # Keep the original file so the invoice history can link to it
+    result["upload_id"] = store_upload(file_bytes, extension)
+    result["original_filename"] = filename
     result["used_ocr"] = used_ocr
     return result
 
 @app.post("/save_invoice")
 async def save_invoice_api(data: dict = Body(...)):
     language = data.get("language", "")
-    fields = dict(data.get("fields", {}))
-    # Fields may have been edited by hand, e.g. "1.785,00" or "28.07.2025"
-    for key in ("total_amount", "vat_amount"):
-        fields[key] = normalize_amount(str(fields.get(key) or ""), language)
-    fields["date"] = normalize_date(str(fields.get("date") or ""))
-    invoice_number = str(fields.get("invoice_number") or "").strip()
-    fields["invoice_number"] = invoice_number
+    fields = clean_fields(data.get("fields", {}), language)
+    invoice_number = fields.get("invoice_number", "")
 
     missing = missing_mandatory_fields(fields)
     if missing:
@@ -79,12 +112,30 @@ async def save_invoice_api(data: dict = Body(...)):
     except Exception:
         logger.exception("Could not save invoice %s", invoice_number)
         raise HTTPException(status_code=500, detail="Could not save the invoice.")
+
+    record_history("accepted", "", fields, data)
     return {"status": "saved"}
 
 @app.put("/update_invoice/{invoice_id}")
 async def update_invoice(invoice_id: int, updated_fields: dict = Body(...)):
+    existing = get_invoice(invoice_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+
+    fields = clean_fields(updated_fields, existing.get("language") or "")
+
+    # The UI calls the date "date"; the saved table calls it "issue_date"
+    as_parsed = {("date" if k == "issue_date" else k): v for k, v in {**existing, **fields}.items()}
+    missing = missing_mandatory_fields(as_parsed)
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing mandatory fields: {', '.join(missing)}")
+
+    new_number = fields.get("invoice_number")
+    if new_number and invoice_exists_in_any_table(new_number, exclude_invoice_id=invoice_id):
+        raise HTTPException(status_code=409, detail="Another invoice already uses this invoice number.")
+
     try:
-        update_invoice_by_id(invoice_id, updated_fields)
+        update_invoice_by_id(invoice_id, fields)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
@@ -95,10 +146,23 @@ async def update_invoice(invoice_id: int, updated_fields: dict = Body(...)):
 @app.delete("/delete_invoice/{invoice_id}")
 async def delete_invoice(invoice_id: int = Path(...)):
     try:
-        delete_invoice_by_id(invoice_id)
+        deleted = delete_invoice_by_id(invoice_id)
     except Exception:
         logger.exception("Could not delete invoice %s", invoice_id)
         raise HTTPException(status_code=500, detail="Could not delete the invoice.")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+    return {"status": "deleted"}
+
+@app.delete("/delete_rejected/{rejected_id}")
+async def delete_rejected(rejected_id: int = Path(...)):
+    try:
+        deleted = delete_rejected_by_id(rejected_id)
+    except Exception:
+        logger.exception("Could not delete rejected invoice %s", rejected_id)
+        raise HTTPException(status_code=500, detail="Could not delete the rejected invoice.")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Rejected invoice not found.")
     return {"status": "deleted"}
 
 @app.get("/get_invoices")
@@ -109,10 +173,23 @@ def api_get_all_invoices():
         logger.exception("Could not load invoices")
         raise HTTPException(status_code=500, detail="Could not load invoices.")
 
+@app.get("/files/{history_id}")
+def get_invoice_file(history_id: int):
+    found = get_history_file(history_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="No file stored for this invoice.")
+    path, original_name = found
+    # inline: the browser opens PDFs and images in a tab instead of downloading them
+    return FileResponse(path, filename=original_name, content_disposition_type="inline")
+
 @app.post("/reject_invoice")
 async def reject_invoice(invoice: dict = Body(...)):
-    invoice_number = str(invoice.get("invoice_number") or "").strip() or UNKNOWN_INVOICE_NUMBER
-    issue_date = invoice.get("issue_date", "")
+    fields = clean_fields(invoice.get("fields") or {}, invoice.get("language", ""))
+    invoice_number = (
+        str(invoice.get("invoice_number") or fields.get("invoice_number") or "").strip()
+        or UNKNOWN_INVOICE_NUMBER
+    )
+    issue_date = invoice.get("issue_date") or fields.get("date", "")
     reason = invoice.get("reason") or "Missing mandatory fields"
 
     # Unreadable invoices all share "UNKNOWN", so they are never duplicates of each other
@@ -120,6 +197,7 @@ async def reject_invoice(invoice: dict = Body(...)):
         raise HTTPException(status_code=409, detail="Invoice already exists in accepted or rejected invoices.")
 
     save_rejected_invoice(invoice_number, issue_date, reason)
+    record_history("rejected", reason, {**fields, "invoice_number": invoice_number, "date": issue_date}, invoice)
     return {"message": "Invoice rejected"}
 
 @app.post("/export_excel")
@@ -129,14 +207,12 @@ def export_excel(
     to_date: Optional[str] = Form(None),
     date_type: str = Form("processing_date")
 ):
-    if not from_date or not to_date:
-        raise HTTPException(status_code=400, detail="Missing from/to date")
     if type not in ("accepted", "rejected"):
         raise HTTPException(status_code=400, detail="Type must be 'accepted' or 'rejected'")
     if date_type not in DATE_COLUMNS:
         raise HTTPException(status_code=400, detail=f"date_type must be one of: {', '.join(sorted(DATE_COLUMNS))}")
 
-    logger.info("Exporting %s invoices from %s to %s using %s", type, from_date, to_date, date_type)
+    logger.info("Exporting %s invoices from %s to %s using %s", type, from_date or "start", to_date or "today", date_type)
     try:
         excel_data = export_invoices_to_excel(type, from_date, to_date, date_type)
     except Exception:

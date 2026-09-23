@@ -1,5 +1,6 @@
 import logging
 import re
+from collections import Counter
 from datetime import datetime
 from langdetect import detect, DetectorFactory
 
@@ -56,6 +57,22 @@ def normalize_amount(value, language="en"):
         return "{:.2f}".format(float(cleaned))
     except ValueError:
         return value.strip()
+
+
+CURRENCY_MARKERS = re.compile(r"€|\$|£|\b(?:EUR|Euro|USD|GBP|CHF)\b", re.IGNORECASE)
+CURRENCY_CODES = {"€": "EUR", "eur": "EUR", "euro": "EUR", "$": "USD", "usd": "USD", "£": "GBP", "gbp": "GBP", "chf": "CHF"}
+
+
+def detect_currency(text: str, language: str) -> str:
+    """The currency named most often on the invoice ("€", "EUR", "$", ...).
+
+    German invoices without any marker are almost always in euro. For other
+    languages we don't guess; the reviewer can fill it in.
+    """
+    counts = Counter(CURRENCY_CODES[m.group(0).lower()] for m in CURRENCY_MARKERS.finditer(text))
+    if counts:
+        return counts.most_common(1)[0][0]
+    return "EUR" if language == "de" else ""
 
 
 def detect_language(text: str) -> str:
@@ -216,6 +233,7 @@ def extract_invoice_fields(text: str):
             fields[field] = normalize_amount(raw_value, language)
         else:
             fields[field] = raw_value
+    fields["currency"] = detect_currency(text, language)
 
     missing_fields = missing_mandatory_fields(fields)
     status = "accepted" if not missing_fields else "rejected"

@@ -8,6 +8,7 @@ venv/
 *.db
 *.sqlite
 invoices_export.xlsx
+backend/uploads/
 node_modules/
 build/
 .DS_Store
