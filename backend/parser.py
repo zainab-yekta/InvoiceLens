@@ -123,7 +123,7 @@ TAG_KEYWORDS = {
     "consulting": [r"consulting", r"advisory", r"berater", r"beratung", r"coaching"],
     "software": [r"software", r"lizenz", r"licen[cs]e", r"subscription", r"abonnement", r"saas\b",
                  r"hosting", r"cloud"],
-    "electronics": [r"computer", r"laptop", r"monitor(?!ing)", r"bildschirm", r"drucker\b", r"printer\b",
+    "electronics": [r"computer", r"laptop", r"monitor(?!ing)", r"bildschirm", r"drucker\b", r"printer\b(?! paper)",
                     r"hardware", r"tastatur", r"keyboard", r"maus\b", r"mouse\b", r"smartphone", r"tablet\b",
                     r"headset", r"festplatte", r"ssd\b", r"grafikkarte"],
     "travel": [r"reise", r"flug(?!hafen)", r"flight", r"hotel", r"übernachtung", r"taxi", r"mietwagen",

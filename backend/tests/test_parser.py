@@ -56,6 +56,8 @@ def test_detect_currency(text, language, expected):
     ("Bewirtung von Geschäftspartnern", ["food"]),
     ("Microsoft 365 subscription, 12 months", ["software"]),
     ("Toner and copy paper", ["office"]),
+    ("Office stationery and printer paper", ["office"]),
+    ("HP LaserJet printer", ["electronics"]),
     ("Glasfaser Internet 500 Mbit", ["telecom"]),
     ("Diesel 45 Liter, Tankstelle Nord", ["vehicle"]),
     ("Hotel Adlon, 2 nights, and flight to Munich", ["travel"]),
