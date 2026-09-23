@@ -1,6 +1,10 @@
-# Invoice Tool
+# InvoiceLens
 
-Upload a German or English invoice (PDF or scanned image), check the fields the tool pulls out, then save or reject it. Saved invoices can be exported to Excel by date range for accounting.
+**OCR invoice extraction for German and English invoices.**
+
+Upload an invoice (PDF, scan or photo), check the fields InvoiceLens reads from it, then save or reject it. Saved invoices can be filtered by date and exported to Excel for accounting.
+
+![InvoiceLens preview: uploading a German invoice, reviewing the extracted fields and saving it](mockups/preview.gif)
 
 ## What it does
 
@@ -86,10 +90,14 @@ Backend tests cover amount, date and currency parsing in both formats, tagging (
 | GET | `/files/{history_id}` | Open the original file of a history entry |
 | POST | `/export_excel` | Download saved or rejected invoices as .xlsx, optionally for a date range |
 
+## Screenshot
+
+![InvoiceLens dashboard with extracted fields, saved and rejected invoices, and the invoice history](mockups/dashboard.png)
+
 ## Project structure
 
 ```
-invoice-tool/
+InvoiceLens/
 ├── backend/
 │   ├── main.py            # FastAPI app and routes
 │   ├── parser.py          # Field extraction, amount/date/currency parsing, tags
@@ -105,6 +113,9 @@ invoice-tool/
 │       ├── format.js      # Number, currency and date helpers
 │       ├── *.test.js      # Frontend tests
 │       └── components/    # UploadCard, ExtractedFields, InvoiceTable, EditInvoiceModal
+└── mockups/
+    ├── preview.gif        # Walkthrough used at the top of this README
+    └── dashboard.png
 ```
 
 ## Design decisions
