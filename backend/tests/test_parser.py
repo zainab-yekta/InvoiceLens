@@ -1,11 +1,6 @@
-import os
-import sys
-
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from parser import normalize_amount, normalize_date, assign_tags, extract_invoice_fields
+from parser import normalize_amount, normalize_date, assign_tags, extract_invoice_fields, detect_currency
 
 
 @pytest.mark.parametrize("raw, language, expected", [
@@ -40,6 +35,18 @@ def test_normalize_amount(raw, language, expected):
 ])
 def test_normalize_date(raw, expected):
     assert normalize_date(raw) == expected
+
+
+@pytest.mark.parametrize("text, language, expected", [
+    ("Gesamtbetrag: 1.785,00 € (EUR)", "de", "EUR"),
+    ("Total Due: $1,200.00", "en", "USD"),
+    ("Amount: £50.00 GBP", "en", "GBP"),
+    ("Betrag: CHF 90.00", "de", "CHF"),
+    ("Summe 100,00", "de", "EUR"),   # German without a marker: euro
+    ("Total 100.00", "en", ""),      # English without a marker: left for the reviewer
+])
+def test_detect_currency(text, language, expected):
+    assert detect_currency(text, language) == expected
 
 
 def test_tags_match_word_starts_only():
@@ -84,6 +91,7 @@ def test_extract_german_invoice():
     assert fields["vat_amount"] == "285.00"
     assert fields["vat_percent"] == "19"
     assert fields["vat_id"] == "DE123456789"
+    assert fields["currency"] == "EUR"
     assert result["status"] == "accepted"
 
 
@@ -95,6 +103,7 @@ def test_extract_english_invoice():
     assert fields["date"] == "2024-03-05"
     assert fields["total_amount"] == "1200.00"
     assert fields["vat_amount"] == "200.00"
+    assert fields["currency"] == "USD"
     assert result["status"] == "accepted"
 
 
