@@ -1,108 +1,116 @@
-# Invoice Processing Tool
+# Invoice Tool
 
-An automated invoice processing system that extracts structured data from PDF and scanned invoices using OCR, validates the results, and exports accounting-ready Excel reports.
+Upload a German or English invoice (PDF or scanned image), check the fields the tool pulls out, then save or reject it. Saved invoices can be exported to Excel by date range for accounting.
 
-Built with **Python**, **FastAPI**, **OCR (Tesseract)**, and **SQLite**.
+## What it does
 
----
+- Reads the text layer of digital PDFs with pdfplumber. If there isn't one (a scanned PDF or a photo), it runs Tesseract OCR instead.
+- Extracts invoice number, invoice date, total, VAT amount, VAT rate, VAT ID, tax number and exemption reason, using rule-based patterns for German and English.
+- Detects the invoice language and reads amounts in the right format: `1.785,00` on a German invoice and `1,785.00` on an English one are both stored as `1785.00`.
+- Flags missing mandatory fields. You can fix them in the form, and the invoice becomes ready to upload as soon as they are filled in.
+- Blocks duplicates across saved and rejected invoices.
+- Tags invoices by keyword (consulting, software, travel, food, office).
+- Exports saved or rejected invoices to Excel, filtered by processing date or issue date. Amounts are real number cells, so they can be summed.
 
-## What It Does
-
-- Accepts PDF or scanned image invoices via a REST API
-- Extracts key fields: invoice number, date, total amount, VAT, tax ID, supplier info
-- Detects language (English and German supported)
-- Validates mandatory fields and flags duplicates
-- Saves accepted and rejected invoices to separate SQLite tables
-- Exports filtered Excel reports by date range for accounting workflows
-- Handles low-quality scans with OCR fallback logic
-
----
-
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |-------|-----------|
 | Backend API | Python, FastAPI |
-| OCR & Text Extraction | Tesseract OCR, pdfplumber |
+| Text extraction | pdfplumber, Tesseract OCR (pytesseract, pdf2image) |
+| Language detection | langdetect |
 | Database | SQLite |
-| Export | openpyxl (Excel .xlsx) |
-| Frontend | React.js |
+| Export | openpyxl |
+| Frontend | React, axios, react-toastify |
+| Tests | pytest |
 
----
+## Run locally
 
-## API Endpoints
+### Prerequisites
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/extract_fields` | Upload invoice PDF/image, returns extracted fields |
-| POST | `/save_invoice` | Save a validated invoice to the database |
-| POST | `/reject_invoice` | Log a rejected invoice with reason |
-| GET | `/get_invoices` | Retrieve all saved invoices |
-| PUT | `/update_invoice/{id}` | Update an existing invoice record |
-| DELETE | `/delete_invoice/{id}` | Delete an invoice by ID |
-| POST | `/export_excel` | Export invoices to Excel by date range and type |
+- Python 3.10 or newer
+- Node.js 18 or newer
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract), for scanned invoices
+- [Poppler](https://poppler.freedesktop.org/), which pdf2image uses to turn scanned PDFs into images. On Windows, download a [release](https://github.com/oschwartz10612/poppler-windows/releases) and add its `Library/bin` folder to your PATH.
 
----
+### Backend
 
-## Project Structure
-
-```
-Invoice-Tool/
-├── backend/
-│   ├── main.py          # FastAPI app and all route handlers
-│   ├── parser.py        # OCR field extraction and tag assignment
-│   ├── pdf_utils.py     # PDF text extraction and OCR logic
-│   ├── database.py      # SQLite init, CRUD, and Excel export
-│   └── check_schema.py  # Schema inspection utility
-├── frontend/
-│   └── src/             # React frontend for invoice upload and review
-└── README.md
-```
-
----
-
-## Run Locally
-
-### 1. Clone the repository
 ```bash
 git clone https://github.com/zainab-yekta/InvoiceLens.git
-cd InvoiceLens
-```
-
-### 2. Set up Python environment
-```bash
-cd backend
+cd InvoiceLens/backend
 python -m venv env
-source env/bin/activate  # Windows: env\Scripts\activate
-pip install fastapi uvicorn pdfplumber pytesseract pillow openpyxl
-```
-
-> Make sure [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) is installed on your system.
-
-### 3. Run the backend
-```bash
+source env/bin/activate        # Windows: env\Scripts\activate
+pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-### 4. Run the frontend
+The API runs on http://127.0.0.1:8000, and interactive docs are at http://127.0.0.1:8000/docs. The SQLite database (`invoices.db`) is created next to `main.py` on first start.
+
+### Frontend
+
 ```bash
-cd ../frontend
+cd frontend
 npm install
 npm start
 ```
 
----
+The app opens on http://localhost:3000. To use a different backend address, set `REACT_APP_API_URL` before `npm start`.
 
-## Key Design Decisions
+### Tests
 
-- **Dual extraction strategy**: tries pdfplumber first for digital PDFs; falls back to Tesseract OCR for scanned documents
-- **Duplicate detection**: checks both accepted and rejected tables before saving
-- **Language detection**: warns when invoice language is outside supported set (EN, DE)
-- **Structured rejection logging**: rejected invoices are stored separately with reason codes for audit purposes
+```bash
+cd backend
+pytest
+```
 
----
+The tests cover amount and date parsing in both formats, keyword tagging, and field extraction from sample German and English invoice text.
+
+## API endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/extract_fields` | Upload a PDF or image and get the extracted fields back |
+| POST | `/save_invoice` | Save a reviewed invoice |
+| POST | `/reject_invoice` | Store a rejected invoice with its reason |
+| GET | `/get_invoices` | List saved and rejected invoices |
+| POST | `/export_excel` | Download saved or rejected invoices for a date range as .xlsx |
+| PUT | `/update_invoice/{id}` | Update fields of a saved invoice (API only, no UI yet) |
+| DELETE | `/delete_invoice/{id}` | Delete a saved invoice (API only, no UI yet) |
+
+## Project structure
+
+```
+invoice-tool/
+├── backend/
+│   ├── main.py            # FastAPI app and routes
+│   ├── parser.py          # Field extraction, amount/date parsing, tags
+│   ├── pdf_utils.py       # pdfplumber text extraction with OCR fallback
+│   ├── database.py        # SQLite access and Excel export
+│   ├── check_schema.py    # Prints the table columns, for debugging
+│   ├── requirements.txt
+│   └── tests/
+├── frontend/
+│   └── src/
+│       ├── App.js         # State and API calls
+│       ├── format.js      # Number and date display helpers
+│       └── components/    # UploadCard, ExtractedFields, InvoiceTable
+```
+
+## Design decisions
+
+- **Text first, OCR second.** pdfplumber is fast and exact on digital PDFs. OCR only runs when a PDF has almost no text, or when the upload is an image.
+- **Amount format comes from the number.** Whichever of `.` or `,` comes last is the decimal separator. The detected language only decides the truly ambiguous case, like `1.234`.
+- **One list of mandatory fields.** The backend defines it once and sends it with every extraction result, so the frontend and backend always agree.
+- **Column names are allow-listed.** User input never ends up in SQL as a column name.
+- **Rejected invoices are kept.** They go to a separate table with the reason, so there's an audit trail.
+
+## Limitations
+
+- Extraction is rule-based. Invoice layouts the patterns don't cover will come back with missing fields for manual review.
+- Dates with slashes are read day-first (`05/03/2024` is 5 March), which suits EU invoices.
+- No user accounts. It's meant to run locally.
 
 ## Author
 
-Built by **Zeinab Ramezani Yekta** — Full-Stack Developer  
+Built by **Zeinab Ramezani Yekta**, Full-Stack Developer
 [LinkedIn](https://linkedin.com/in/zeinab-ramezani) · [GitHub](https://github.com/zainab-yekta)

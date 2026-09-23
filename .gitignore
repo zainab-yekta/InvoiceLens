@@ -11,3 +11,8 @@ invoices_export.xlsx
 node_modules/
 build/
 .DS_Store
+
+# Personal notes and design mockups (kept locally, not published)
+*.docx
+final look.JPG
+.pytest_cache/
