@@ -12,9 +12,9 @@ Upload a German or English invoice (PDF or scanned image), check the fields the 
 - Blocks duplicates across saved and rejected invoices.
 - Saved invoices can be edited and deleted, and rejected ones deleted, from the tables.
 - Keeps an invoice history: every accepted or rejected invoice is recorded with its fields, tags, reason and a link to the original file. Editing or deleting an invoice later does not change its history row.
-- Tags invoices by keyword (consulting, software, travel, food, office).
+- Tags each invoice with a category by matching English and German keywords in its text: consulting, software, electronics, travel, food, office, telecom and vehicle (or uncategorized). Tags are saved with the invoice, shown in the tables, and can be corrected with Edit.
 - One date filter (by processing date or issue date) narrows the Saved, Rejected and History tables and the Excel export. Either end of the range can be left open.
-- Exports saved or rejected invoices to Excel. Amounts are real number cells, so they can be summed, with the currency in its own column.
+- Exports saved or rejected invoices to Excel. Amounts are real number cells, so they can be summed, with currency and tags in their own columns.
 
 ## Tech stack
 
@@ -64,13 +64,13 @@ The app opens on http://localhost:3000. To use a different backend address, set 
 
 ```bash
 cd backend
-pytest                              # 38 tests
+pytest
 
 cd frontend
-npm test -- --watchAll=false        # 17 tests
+npm test -- --watchAll=false
 ```
 
-Backend tests cover amount, date and currency parsing in both formats, field extraction from sample German and English invoices, and every API endpoint against a throwaway database. Frontend tests cover number and date formatting, the date filter, editing and deleting, the history file links, and fixing a rejected invoice before upload.
+Backend tests cover amount, date and currency parsing in both formats, tagging (including look-alike words that must not match), field extraction from sample German and English invoices, and every API endpoint against a throwaway database. Frontend tests cover number and date formatting, the date filter, tags, editing and deleting, the history file links, and fixing a rejected invoice before upload.
 
 ## API endpoints
 
@@ -92,7 +92,7 @@ Backend tests cover amount, date and currency parsing in both formats, field ext
 invoice-tool/
 ├── backend/
 │   ├── main.py            # FastAPI app and routes
-│   ├── parser.py          # Field extraction, amount/date parsing, tags
+│   ├── parser.py          # Field extraction, amount/date/currency parsing, tags
 │   ├── pdf_utils.py       # pdfplumber text extraction with OCR fallback
 │   ├── database.py        # SQLite access and Excel export
 │   ├── check_schema.py    # Prints the table columns, for debugging
@@ -114,11 +114,13 @@ invoice-tool/
 - **One list of mandatory fields.** The backend defines it once and sends it with every extraction result, so the frontend and backend always agree.
 - **Column names are allow-listed.** User input never ends up in SQL as a column name.
 - **The history is append-only.** The Saved and Rejected tables are working lists you can edit and clean up. The history table is never edited or deleted, so it stays a reliable record of what was decided and why.
+- **Tags come from keywords, not guesses.** Each keyword must start a word, so "Reisekosten" counts as travel but "Preise" doesn't. Words that also appear in addresses and footers are guarded: "Essen" (a city), "Bahnhofstraße", "Registered office".
 - **Stored files can't be reached by path.** Uploads get a random name, and the file link goes through the history ID, so a request can't point at other files on the server.
 
 ## Limitations
 
 - Extraction is rule-based. Invoice layouts the patterns don't cover will come back with missing fields for manual review.
+- Tagging reads the whole invoice text, including the seller's name and address, and only knows the keywords in `TAG_KEYWORDS` in `parser.py`. An item it has no keyword for gets "uncategorized".
 - Dates with slashes are read day-first (`05/03/2024` is 5 March), which suits EU invoices.
 - `$` is read as US dollars. For other dollar currencies, correct the Currency field before saving.
 - A file is stored as soon as you click Proceed. Files for invoices that are never saved or rejected stay in `backend/uploads/`.
