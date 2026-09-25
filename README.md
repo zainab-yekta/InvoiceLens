@@ -44,7 +44,7 @@ Upload an invoice (PDF, scan or photo), check the fields InvoiceLens reads from 
 ### Backend
 
 ```bash
-git clone https://github.com/zainab-yekta/InvoiceLens.git
+git clone https://github.com/zeinab-r-yekta/InvoiceLens.git
 cd InvoiceLens/backend
 python -m venv env
 source env/bin/activate        # Windows: env\Scripts\activate
@@ -140,4 +140,4 @@ InvoiceLens/
 ## Author
 
 Built by **Zeinab Ramezani Yekta**, Full-Stack Developer
-[LinkedIn](https://linkedin.com/in/zeinab-ramezani) · [GitHub](https://github.com/zainab-yekta)
+[LinkedIn](https://linkedin.com/in/zeinab-ramezani) · [GitHub](https://github.com/zeinab-r-yekta)
